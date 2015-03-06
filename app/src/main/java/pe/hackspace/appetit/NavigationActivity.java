@@ -1,120 +1,83 @@
 package pe.hackspace.appetit;
 
 import android.app.Activity;
-import android.content.res.Configuration;
+import android.graphics.SurfaceTexture;
 import android.hardware.Camera;
 import android.os.Bundle;
 import android.util.Log;
-import android.view.SurfaceHolder;
-import android.view.SurfaceView;
+import android.util.Pair;
 
+import android.view.TextureView;
+
+
+import java.io.IOException;
 import java.util.List;
 
-public class NavigationActivity extends Activity implements
-        SurfaceHolder.Callback {
+public class NavigationActivity extends Activity implements TextureView.SurfaceTextureListener {
+    private Camera mCamera;
+    private TextureView mTextureView;
 
-    Camera mCamera;
-    SurfaceView mPreview;
-
-    @Override
-    public void onCreate(Bundle savedInstanceState) {
+    protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_navigation);
 
-        mPreview = (SurfaceView)findViewById(R.id.preview);
-        mPreview.getHolder().addCallback(this);
+        mTextureView = new TextureView(this);
+        mTextureView.setSurfaceTextureListener(this);
 
+        setContentView(mTextureView);
+    }
+
+    private static Pair<Integer, Integer> getMaxSize(List<Camera.Size> list, int TextureWidth, int TextureHeight)
+    {
+        int width = 0;
+        int height = 1;
+
+        double TextureAspect = (double)TextureHeight / TextureWidth;
+        double LastAspect = 10;
+
+        for (Camera.Size size : list) {
+            Log.d("Camera", "PreviewSize: " + Integer.toString(size.width) + ":" + Integer.toString(size.height));
+            if (Math.abs(TextureAspect - (double)width/height) < Math.abs(TextureAspect - LastAspect))
+            {
+                width = size.width;
+                height = size.height;
+                LastAspect = (double) width / height;
+            }
+        }
+
+        return new Pair<Integer, Integer>(width, height);
+    }
+
+    public void onSurfaceTextureAvailable(SurfaceTexture surface, int width, int height) {
         mCamera = Camera.open();
-        Log.i("Navigation", "OnCreate");
-    }
-
-    @Override
-    public void onPause() {
-        super.onPause();
-        mCamera.stopPreview();
-    }
-
-    @Override
-    public void onDestroy() {
-        super.onDestroy();
-        mCamera.release();
-    }
-
-    //Surface Callback Methods
-    @Override
-    public void surfaceChanged(SurfaceHolder holder, int format,
-                               int width, int height) {
-        try {
-            mCamera.stopPreview();
-        } catch (Exception e){
-            // ignore: tried to stop a non-existent preview
-        }
-
+        Log.d("Texture", "Texture Size: " + Integer.toString(width) + ":" + Integer.toString(height));
         Camera.Parameters params = mCamera.getParameters();
-        //Get the device's supported sizes and pick the first,
-        // which is the largest
-        List<Camera.Size> sizes = params.getSupportedPreviewSizes();
+        params.setFocusMode(Camera.Parameters.FOCUS_MODE_INFINITY);
+        Pair<Integer, Integer> size = getMaxSize(params.getSupportedPreviewSizes(), width, height);
 
-        Camera.Size selected = sizes.get(sizes.size() - 1);
-        params.setPreviewSize(selected.width,selected.height);
-        List<int[]>  rates = params.getSupportedPreviewFpsRange();
-        int [] maxRate = rates.get(rates.size() - 1);
-        params.setPreviewFpsRange(maxRate[0],maxRate[1]);
-
-        int previewSurfaceHeight = mPreview.getHeight();
-        int previewSurfaceWidth = mPreview.getWidth();
-
-        
-
-        if (this.getResources().getConfiguration().orientation != Configuration.ORIENTATION_LANDSCAPE) {
-            mCamera.setDisplayOrientation(90);
-            lp.height = previewSurfaceHeight;
-            lp.width = (int) (previewSurfaceHeight );
-        } else {
-            mCamera.setDisplayOrientation(0);
-            lp.width = previewSurfaceWidth;
-            lp.height = (int) (previewSurfaceWidth);
-        }
-
-        if (params.isZoomSupported())
-            params.setZoom(0);
+        Log.d("Camera", "Selected preview size: " + Integer.toString(size.first) + ":" + Integer.toString(size.second));
+        params.setPreviewSize(size.first, size.second);
         mCamera.setParameters(params);
-
-
+        mCamera.setDisplayOrientation(90);
         try {
-            mCamera.setPreviewDisplay(mPreview.getHolder());
+            mCamera.setPreviewTexture(surface);
             mCamera.startPreview();
-
-        } catch (Exception e){
-            Log.d("Camera", "Error starting camera preview: " + e.getMessage());
-        }
-
-    }
-
-    @Override
-    public void surfaceCreated(SurfaceHolder holder) {
-        Log.i("Navigation", "surfaceCreated");
-        Camera.Parameters params = mCamera.getParameters();
-        /*
-        Camera.Size previewSize = params.getSupportedPreviewSizes().get(0);
-        int previewWidth = mPreview.getWidth();
-        int mPreviewHeight = mPreview.getHeight();
-        int scale = Math.max(previewSize.width);
-        */
-        for(Camera.Size size: mCamera.getParameters().getSupportedPreviewSizes()){
-            Log.d("Camera", "Supported Size: " + Integer.toString(size.width) + ":" + Integer.toString(size.height));
-        }
-        try {
-            mCamera.setPreviewDisplay(mPreview.getHolder());
-            mCamera.startPreview();
-
-        } catch (Exception e) {
-            Log.d("Camera","Error setting camera preview: " + e.getMessage());
+        } catch (IOException ioe) {
+            // Something bad happened
         }
     }
 
-    @Override
-    public void surfaceDestroyed(SurfaceHolder holder) {
+    public void onSurfaceTextureSizeChanged(SurfaceTexture surface, int width, int height) {
+
+    }
+
+    public boolean onSurfaceTextureDestroyed(SurfaceTexture surface) {
+        mCamera.stopPreview();
         mCamera.release();
+        return true;
     }
+
+    public void onSurfaceTextureUpdated(SurfaceTexture surface) {
+        // Invoked every time there's a new Camera preview frame
+    }
+
 }
